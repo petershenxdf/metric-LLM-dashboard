@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSDBCODI Interactive Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/scatterplot.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chatbox.css') }}">
+</head>
+<body>
+    <header class="app-header">
+        <h1>SSDBCODI Interactive Dashboard</h1>
+        <div class="header-status">
+            <span id="status-indicator" class="status-dot"></span>
+            <span id="status-text">Idle</span>
+        </div>
+    </header>
+
+    <main class="app-main">
+        <section class="panel panel-left">
+            <div class="control-bar" id="control-bar">
+                <!-- Control panel renders here -->
+            </div>
+            <div class="scatterplot-container" id="scatterplot">
+                <div class="placeholder" id="scatterplot-placeholder">
+                    Upload a CSV or load a sample to begin
+                </div>
+            </div>
+            <div class="legend-container" id="legend"></div>
+        </section>
+
+        <section class="panel panel-right">
+            <div class="chatbox-container" id="chatbox"></div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='lib/d3.v7.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='lib/d3-lasso.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/api_client.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/state.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils/colors.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/scatterplot.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/chatbox.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/control_panel.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/components/legend.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

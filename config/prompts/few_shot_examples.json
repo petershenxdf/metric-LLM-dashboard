@@ -1,0 +1,68 @@
+[
+  {
+    "user": "These selected points should all be one class",
+    "context": {"selected_point_ids": [12, 45, 67], "n_points": 200},
+    "output": {
+      "intent": "must_link",
+      "complete": true,
+      "constraint": {"type": "must_link", "point_ids": [12, 45, 67], "confidence": "explicit"},
+      "followup_question": null,
+      "confirmation_message": "Got it — these 3 points should be in the same cluster."
+    }
+  },
+  {
+    "user": "the unselected points should be 3 groups",
+    "context": {"selected_point_ids": [1, 2, 3], "n_points": 100},
+    "output": {
+      "intent": "cluster_count",
+      "complete": true,
+      "constraint": {"type": "cluster_count", "scope": "unselected", "target_k": 3, "confidence": "explicit"},
+      "followup_question": null,
+      "confirmation_message": "Got it — splitting the unselected points into 3 clusters."
+    }
+  },
+  {
+    "user": "these are outliers",
+    "context": {"selected_point_ids": [23, 56], "n_points": 200},
+    "output": {
+      "intent": "outlier_label",
+      "complete": true,
+      "constraint": {"type": "outlier_label", "point_ids": [23, 56], "is_outlier": true, "confidence": "explicit"},
+      "followup_question": null,
+      "confirmation_message": "Got it — marking 2 points as outliers."
+    }
+  },
+  {
+    "user": "color is not important",
+    "context": {"selected_point_ids": [], "n_points": 200},
+    "output": {
+      "intent": "feature_hint",
+      "complete": false,
+      "constraint": null,
+      "followup_question": "Do you want me to completely ignore the color feature, or just reduce its importance?",
+      "confirmation_message": null
+    }
+  },
+  {
+    "user": "what's the weather today",
+    "context": {"selected_point_ids": [], "n_points": 200},
+    "output": {
+      "intent": "off_topic",
+      "complete": false,
+      "constraint": null,
+      "followup_question": "I can only help you adjust the clustering. What would you like to do with the points?",
+      "confirmation_message": null
+    }
+  },
+  {
+    "user": "merge cluster 2 and cluster 5",
+    "context": {"selected_point_ids": [], "n_points": 200},
+    "output": {
+      "intent": "cluster_merge",
+      "complete": true,
+      "constraint": {"type": "cluster_merge", "cluster_ids": [2, 5], "confidence": "explicit"},
+      "followup_question": null,
+      "confirmation_message": "Got it — merging clusters 2 and 5 into one."
+    }
+  }
+]
