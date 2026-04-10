@@ -98,7 +98,16 @@ The default values in `.env` already point to local Ollama on port 11434 with th
 `mistral-small3.1:latest` model, so you usually don't need to edit anything.
 
 If you want to use a different LLM (e.g. GPT-4o-mini), edit `.env`:
-
+def fit(self, X, constraints, prior_M=None):
+    # Use prior_M as initialization if provided
+    if prior_M is not None:
+        self.M = prior_M.copy()
+    
+    # Apply new constraints to refine M
+    for constraint in constraints:
+        # Update M using ITML algorithm with current constraints
+    
+    return self.M
 ```
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
