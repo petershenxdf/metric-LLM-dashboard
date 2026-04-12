@@ -23,7 +23,7 @@ _PATTERNS = [
     # cluster_count -- match first because it has the most specific pattern
     (
         re.compile(
-            r"\b(?:into|split\s+into|should\s*be|need|want)\s+(\d+)\s*(?:class|cluster|group)s?\b",
+            r"\b(?:into|split\s+into|should\s*be|need|want)\s+(\d+)\s*(?:class(?:es)?|clusters?|groups?)\b",
             re.IGNORECASE,
         ),
         IntentType.CLUSTER_COUNT,
@@ -38,30 +38,44 @@ _PATTERNS = [
         IntentType.CLUSTER_MERGE,
         lambda m: {"cluster_ids": [int(m.group(1)), int(m.group(2))]},
     ),
-    # must_link
+    # cannot_link -- must come BEFORE must_link so phrases that contain both
+    # "should" and "not" are captured here first.
+    # Accepts plurals ("different clusters"), typos ("differnet", "shuld"),
+    # apostrophe variants ("shouldn't"), and "in/into different class".
     (
         re.compile(
-            r"\b(same\s*(?:class|cluster|group)|one\s*(?:class|cluster|group)|"
-            r"belong\s*together|group\s*these\s*together)\b",
-            re.IGNORECASE,
-        ),
-        IntentType.MUST_LINK,
-        lambda m: {},
-    ),
-    # cannot_link
-    (
-        re.compile(
-            r"\b(should\s*not\s*be\s*together|separate|different\s*(?:class|cluster|group)|"
-            r"not\s*the\s*same\s*(?:class|cluster|group))\b",
+            r"\b(sho?u?ld\s*n[o']?t\s*be\s*(?:in\s*(?:the\s*)?)?(?:same|together)|"
+            r"sho?u?ld\s*n[o']?t\s*be|"
+            r"shou?ldn['\u2019]?t\s*be\s*(?:in\s*(?:the\s*)?)?(?:same|together)|"
+            r"sho?u?ld\s*be\s*(?:in\s*)?differ?ent|"
+            r"(?:keep|put|pull)\s*(?:them\s*|these\s*)?apart|"
+            r"separate(?:d)?|"
+            r"differ?ent\s*(?:class(?:es)?|clusters?|groups?)|"
+            r"not\s*(?:in\s*)?the\s*same\s*(?:class(?:es)?|clusters?|groups?))\b",
             re.IGNORECASE,
         ),
         IntentType.CANNOT_LINK,
         lambda m: {},
     ),
+    # must_link
+    (
+        re.compile(
+            r"\b(same\s*(?:class(?:es)?|clusters?|groups?)|"
+            r"one\s*(?:class(?:es)?|clusters?|groups?)|"
+            r"sho?u?ld\s*be\s*(?:in\s*(?:the\s*)?)?(?:same|together|one)|"
+            r"sho?u?ld\s*be\s*together|"
+            r"(?:keep|put|group)\s*(?:them\s*|these\s*)?together|"
+            r"belong\s*together)\b",
+            re.IGNORECASE,
+        ),
+        IntentType.MUST_LINK,
+        lambda m: {},
+    ),
     # triplet
     (
         re.compile(
-            r"\b(more\s*similar\s*to|closer\s*to|more\s*like)\b",
+            r"\b(more\s*similar\s*to|closer\s*to|more\s*like|"
+            r"triplet|anchor|nearer\s*to)\b",
             re.IGNORECASE,
         ),
         IntentType.TRIPLET,

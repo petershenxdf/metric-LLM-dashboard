@@ -53,6 +53,7 @@ class SessionService:
         state.DN = {}
         state.DO = set()
         state.constraints_history = []
+        state.pending_constraints = []
         state.current_clusters = None
         state.current_outliers = None
         state.current_projection = None

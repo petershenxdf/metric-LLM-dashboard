@@ -44,6 +44,20 @@ class ControlPanel {
 
         this.state.on("session_changed", () => this._onSessionChanged());
         this.state.on("projection_changed", (data) => this._onProjectionChanged(data));
+        this.state.on("pending_changed", (n) => this._onPendingChanged(n));
+    }
+
+    _onPendingChanged(n) {
+        // Surface the pending count on the Run button so the user knows why
+        // clicking it matters.
+        if (!this.runBtn) return;
+        if (n && n > 0) {
+            this.runBtn.textContent = `Run clustering (${n} pending)`;
+            this.runBtn.classList.add("has-pending");
+        } else {
+            this.runBtn.textContent = "Run clustering";
+            this.runBtn.classList.remove("has-pending");
+        }
     }
 
     async _loadSamples() {
@@ -170,8 +184,10 @@ class ControlPanel {
         }
         if (data) {
             const di = this.state.datasetInfo || {};
+            const pending = data.n_pending || 0;
+            const pendingText = pending > 0 ? ` | ${pending} pending` : "";
             this.infoText.textContent =
-                `${di.n_points || "?"} points | ${data.n_clusters || 0} clusters | ${data.n_outliers || 0} outliers`;
+                `${di.n_points || "?"} points | ${data.n_clusters || 0} clusters | ${data.n_outliers || 0} outliers${pendingText}`;
         }
     }
 

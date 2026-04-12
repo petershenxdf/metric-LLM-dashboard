@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ':*)",
+      "Bash(python -m py_compile app/services/chat_service.py app/domain/intent/llm_classifier.py app/domain/intent/rule_classifier.py app/domain/clustering/ssdbcodi.py)",
+      "Bash(python -m pytest tests/test_ssdbcodi.py tests/test_metric_learner.py tests/test_rule_classifier.py tests/test_distance.py tests/test_constraints.py -q)"
+    ]
+  }
+}

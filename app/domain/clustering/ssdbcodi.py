@@ -19,6 +19,7 @@ from typing import Dict, Set, Optional
 from dataclasses import dataclass
 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.cluster import DBSCAN
 
 from .ssdbscan import ssdbscan
 from .scores import (
@@ -96,10 +97,20 @@ class SSDBCODI:
         if distance_func is None:
             distance_func = make_distance(n_features=X.shape[1])
 
-        # If we have no labels at all, fall back to a single-cluster output
-        # so the dashboard can still show something on the first run.
+        # If we have no labels at all, fall back to unsupervised DBSCAN using
+        # the learned distance so the dashboard can still show something.
         if not DN:
-            return self._cold_start_fallback(X, DO)
+            return self._unsupervised_fallback(X, DO, distance_func)
+
+        # If the user has only given a single cluster label (e.g. one must-link
+        # group), SSDBSCAN expansion would never hit a "different label"
+        # terminator and would collapse every reachable point into that one
+        # cluster. That destroys the original structure and ignores the learned
+        # metric. Fall back to DBSCAN on the learned distance and overlay the
+        # user labels on top: the labeled points become a dedicated cluster,
+        # everything else is clustered unsupervised.
+        if len(set(DN.values())) < 2:
+            return self._supervised_overlay_fallback(X, DN, DO, distance_func)
 
         # Step 1: SSDBSCAN expansion
         cluster_assignments, dist_matrix, rdist_matrix, core_dists = ssdbscan(
@@ -203,19 +214,137 @@ class SSDBCODI:
             tscore=tscore,
         )
 
-    def _cold_start_fallback(self, X: np.ndarray, DO: Set[int]) -> SSDBCODIResult:
-        """When we have no DN labels yet (initial state), put everything into a
-        single cluster and mark only the user-flagged outliers.
+    def _run_dbscan_on_distance(
+        self, X: np.ndarray, distance_func
+    ) -> np.ndarray:
+        """Run DBSCAN using the provided distance function (which respects the
+        learned Mahalanobis metric). Returns DBSCAN's raw label array.
 
-        This lets the dashboard render a default scatterplot before the user has
-        provided any guidance.
+        eps is auto-estimated from the distribution of k-nearest-neighbor
+        distances under the same metric — a classic heuristic that works on
+        most datasets without the user having to tune it.
         """
         n = len(X)
-        cluster_labels = np.zeros(n, dtype=int)
+        if n < max(self.min_pts, 2):
+            return np.full(n, -1, dtype=int)
+
+        dist_matrix = distance_func.pairwise(X)
+        # Symmetrize + zero diagonal for DBSCAN's precomputed mode
+        dist_matrix = (dist_matrix + dist_matrix.T) / 2.0
+        np.fill_diagonal(dist_matrix, 0.0)
+
+        k = max(self.min_pts, 2)
+        sorted_rows = np.sort(dist_matrix, axis=1)
+        kth_distances = sorted_rows[:, min(k, n - 1)]
+        # 90th percentile of the k-th NN distance: tight enough to separate
+        # blobs, loose enough to include core points.
+        eps = float(np.percentile(kth_distances, 90))
+        if eps <= 0:
+            eps = float(np.mean(kth_distances) + 1e-6)
+
+        db = DBSCAN(eps=eps, min_samples=self.min_pts, metric="precomputed").fit(
+            dist_matrix
+        )
+        return db.labels_
+
+    def _unsupervised_fallback(
+        self, X: np.ndarray, DO: Set[int], distance_func
+    ) -> SSDBCODIResult:
+        """Cold-start path: no DN labels. Run DBSCAN on the learned distance
+        so the user sees a meaningful initial clustering.
+        """
+        n = len(X)
+        cluster_labels = np.full(n, -1, dtype=int)
         is_outlier = np.zeros(n, dtype=bool)
+
+        raw_labels = self._run_dbscan_on_distance(X, distance_func)
+
+        # Remap DBSCAN labels so cluster ids start at 0 (DBSCAN uses -1 for noise)
+        unique_clusters = sorted(set(int(l) for l in raw_labels if l >= 0))
+        remap = {old: new for new, old in enumerate(unique_clusters)}
+        for i, lbl in enumerate(raw_labels):
+            lbl_int = int(lbl)
+            if lbl_int < 0:
+                cluster_labels[i] = -1
+                is_outlier[i] = True
+            else:
+                cluster_labels[i] = remap[lbl_int]
+
+        # User-flagged outliers always win
         for i in DO:
-            cluster_labels[i] = -1
-            is_outlier[i] = True
+            if 0 <= i < n:
+                cluster_labels[i] = -1
+                is_outlier[i] = True
+
+        zeros = np.zeros(n)
+        ones = np.ones(n)
+        return SSDBCODIResult(
+            cluster_labels=cluster_labels,
+            is_outlier=is_outlier,
+            rscore=ones,
+            lscore=ones,
+            simscore=zeros,
+            tscore=zeros,
+        )
+
+    def _supervised_overlay_fallback(
+        self,
+        X: np.ndarray,
+        DN: Dict[int, int],
+        DO: Set[int],
+        distance_func,
+    ) -> SSDBCODIResult:
+        """Handle the "only one unique label in DN" case.
+
+        Rather than letting SSDBSCAN collapse everything into the single
+        labeled cluster, we:
+          1. Run DBSCAN on the learned distance for structural discovery.
+          2. Reserve a dedicated cluster id for the labeled group (the id the
+             user chose, offset from DBSCAN's ids if it would collide).
+          3. Remap DBSCAN labels to avoid colliding with the labeled id.
+          4. Force all DN points into the labeled cluster, force DO into
+             outliers, leave everything else as DBSCAN assigned.
+        """
+        n = len(X)
+        cluster_labels = np.full(n, -1, dtype=int)
+        is_outlier = np.zeros(n, dtype=bool)
+
+        raw_labels = self._run_dbscan_on_distance(X, distance_func)
+        dbscan_ids = sorted(set(int(l) for l in raw_labels if l >= 0))
+
+        # The user-chosen label (there is exactly one unique value in DN)
+        user_label = int(next(iter(set(DN.values()))))
+
+        # Build a remap for DBSCAN labels so they skip `user_label`. Cluster
+        # ids start at 0 and step over `user_label`.
+        remap: Dict[int, int] = {}
+        next_id = 0
+        for old in dbscan_ids:
+            if next_id == user_label:
+                next_id += 1
+            remap[old] = next_id
+            next_id += 1
+
+        for i, lbl in enumerate(raw_labels):
+            lbl_int = int(lbl)
+            if lbl_int < 0:
+                cluster_labels[i] = -1
+                is_outlier[i] = True
+            else:
+                cluster_labels[i] = remap[lbl_int]
+
+        # Overlay DN — user labels take precedence and unify the group
+        for i, cid in DN.items():
+            if 0 <= i < n:
+                cluster_labels[i] = int(cid)
+                is_outlier[i] = False
+
+        # DO always wins
+        for i in DO:
+            if 0 <= i < n:
+                cluster_labels[i] = -1
+                is_outlier[i] = True
+
         zeros = np.zeros(n)
         ones = np.ones(n)
         return SSDBCODIResult(

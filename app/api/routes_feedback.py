@@ -10,6 +10,10 @@ bp = Blueprint("feedback", __name__, url_prefix="/api/feedback")
 
 @bp.route("/submit", methods=["POST"])
 def submit_constraint():
+    """Queue a constraint. This does NOT re-run the pipeline — that only
+    happens when the user explicitly clicks "Run clustering". The chatbox
+    uses this to stage constraints as the user composes them.
+    """
     body = request.get_json() or {}
     session_id = body.get("session_id")
     constraint_dict = body.get("constraint")
@@ -25,8 +29,31 @@ def submit_constraint():
         raise ValidationError(f"Invalid constraint: {e}")
 
     feedback = current_app.config["FEEDBACK_SERVICE"]
-    result = feedback.apply_constraint(session_id, constraint)
+    result = feedback.queue_constraint(session_id, constraint)
     return jsonify(result)
+
+
+@bp.route("/pending/<session_id>", methods=["GET"])
+def list_pending(session_id):
+    session_service = current_app.config["SESSION_SERVICE"]
+    state = session_service.get(session_id)
+    if state is None:
+        raise NotFoundError(f"Session {session_id} not found")
+    return jsonify({
+        "pending": [c.to_dict() for c in state.pending_constraints]
+    })
+
+
+@bp.route("/pending/clear", methods=["POST"])
+def clear_pending():
+    body = request.get_json() or {}
+    session_id = body.get("session_id")
+    if not session_id:
+        raise ValidationError("Missing session_id")
+
+    feedback = current_app.config["FEEDBACK_SERVICE"]
+    n = feedback.clear_pending(session_id)
+    return jsonify({"cleared": n})
 
 
 @bp.route("/undo", methods=["POST"])

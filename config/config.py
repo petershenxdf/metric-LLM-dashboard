@@ -25,7 +25,7 @@ class Config:
     llm_base_url: str = "http://localhost:11434"
     llm_api_key: str = ""
     llm_temperature: float = 0.1
-    llm_timeout: int = 60
+    llm_timeout: int = 300
 
     # Storage
     storage_backend: str = "memory"       # memory | pickle
@@ -87,7 +87,7 @@ def load_config() -> Config:
         llm_base_url=os.getenv("LLM_BASE_URL", "http://localhost:11434"),
         llm_api_key=os.getenv("LLM_API_KEY", ""),
         llm_temperature=_float("LLM_TEMPERATURE", 0.1),
-        llm_timeout=_int("LLM_TIMEOUT", 60),
+        llm_timeout=_int("LLM_TIMEOUT", 300),
         storage_backend=os.getenv("STORAGE_BACKEND", "memory"),
         pickle_store_path=os.getenv("PICKLE_STORE_PATH", "./data/sessions"),
         ssdbcodi_min_pts=_int("SSDBCODI_MIN_PTS", 3),

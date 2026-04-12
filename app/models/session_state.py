@@ -26,8 +26,16 @@ class SessionState:
     # Set of point_ids the user marked as outliers
     DO: Set[int] = field(default_factory=set)
 
-    # Constraint history (list of Constraint objects, with to_dict())
+    # Constraint history (list of Constraint objects, with to_dict()).
+    # These are constraints that have already been applied (labels / metric
+    # updated and pipeline re-run).
     constraints_history: List[Any] = field(default_factory=list)
+
+    # Pending constraints: staged by the chatbox but not yet applied. The
+    # "Run clustering" button is what triggers the flush. This separation
+    # lets the user build up several instructions before paying the cost of
+    # a pipeline run, and keeps the UX predictable.
+    pending_constraints: List[Any] = field(default_factory=list)
 
     # Most recent clustering output
     current_clusters: Optional[np.ndarray] = None    # shape (n,) cluster_id per point
@@ -64,6 +72,7 @@ class SessionState:
             "DN": copy.deepcopy(self.DN),
             "DO": copy.deepcopy(self.DO),
             "constraints_history": copy.deepcopy(self.constraints_history),
+            "pending_constraints": copy.deepcopy(self.pending_constraints),
             "current_clusters": copy.deepcopy(self.current_clusters),
             "current_outliers": copy.deepcopy(self.current_outliers),
             "current_projection": copy.deepcopy(self.current_projection),
@@ -81,6 +90,7 @@ class SessionState:
         self.DN = snap["DN"]
         self.DO = snap["DO"]
         self.constraints_history = snap["constraints_history"]
+        self.pending_constraints = snap.get("pending_constraints", [])
         self.current_clusters = snap["current_clusters"]
         self.current_outliers = snap["current_outliers"]
         self.current_projection = snap["current_projection"]
@@ -96,6 +106,7 @@ class SessionState:
             "n_points": self.n_points(),
             "n_features": self.n_features(),
             "n_constraints": len(self.constraints_history),
+            "n_pending": len(self.pending_constraints),
             "n_labeled_normal": len(self.DN),
             "n_labeled_outlier": len(self.DO),
             "has_clustering": self.current_clusters is not None,

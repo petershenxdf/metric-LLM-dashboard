@@ -13,6 +13,9 @@ from typing import Dict, Any, List, Optional
 from pathlib import Path
 
 from app.infrastructure.llm.base import LLMClient
+from app.infrastructure.debug.logger import get_logger
+
+logger = get_logger("intent.llm")
 
 
 class LLMIntentClassifier:
@@ -69,9 +72,17 @@ class LLMIntentClassifier:
         try:
             raw_response = self.llm.chat(messages)
         except Exception as e:
+            logger.error("LLM call failed: %s", e, exc_info=True)
             return self._fallback_response(f"LLM call failed: {e}")
 
-        return self._parse_response(raw_response)
+        logger.debug("LLM raw response: %s", raw_response)
+        parsed = self._parse_response(raw_response)
+        if parsed.get("_error"):
+            logger.warning(
+                "LLM response could not be parsed. error=%s raw=%r",
+                parsed["_error"], raw_response[:500],
+            )
+        return parsed
 
     def _parse_response(self, raw: str) -> Dict[str, Any]:
         """Robustly extract a JSON object from the LLM response."""

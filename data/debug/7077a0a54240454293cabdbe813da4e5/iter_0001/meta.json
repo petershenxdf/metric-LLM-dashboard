@@ -1,0 +1,14 @@
+{
+  "iteration": 1,
+  "session_id": "7077a0a54240454293cabdbe813da4e5",
+  "timestamp": 1775928863.114857,
+  "duration_ms": 696.9,
+  "triggering_constraint": null,
+  "n_points": 320,
+  "n_features": 2,
+  "n_clusters": 10,
+  "n_outliers": 0,
+  "n_labeled_normal": 32,
+  "n_labeled_outlier": 0,
+  "source_filename": "moons.csv"
+}

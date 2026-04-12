@@ -1,0 +1,14 @@
+{
+  "iteration": 0,
+  "session_id": "3cf2a76e274948ff89ffc790923822e3",
+  "timestamp": 1775950390.736718,
+  "duration_ms": 71.29,
+  "triggering_constraint": null,
+  "n_points": 315,
+  "n_features": 2,
+  "n_clusters": 10,
+  "n_outliers": 9,
+  "n_labeled_normal": 0,
+  "n_labeled_outlier": 0,
+  "source_filename": "circles.csv"
+}

@@ -5,27 +5,28 @@ Estimated time: 10-15 minutes the first time.
 
 ## Prerequisites
 
-- Python 3.10 or newer
-- `curl` (for downloading JS libraries)
+- [Anaconda](https://www.anaconda.com/download) (Python 3.10 or newer — included with Anaconda)
 - An internet connection (once, for the initial library downloads and the Ollama model pull)
 - ~4 GB of free disk space (most of it for the LLM model)
 
+All commands below should be run in **Anaconda Prompt** (search "Anaconda Prompt" in the Start menu).
+
 ## Step 1 — Unpack the project
 
-```bash
-unzip ssdbcodi-dashboard.zip
-cd ssdbcodi-dashboard
+Right-click `ssdbcodi-dashboard.zip` in Windows Explorer and select **Extract All**, then open Anaconda Prompt and navigate to the extracted folder:
+
+```
+cd path\to\ssdbcodi-dashboard
 ```
 
-## Step 2 — Create a Python virtual environment
+## Step 2 — Create a Conda environment
 
-```bash
-python -m venv venv
-source venv/bin/activate         # macOS / Linux
-# venv\Scripts\activate          # Windows PowerShell
+```
+conda create -n ssdbcodi python=3.10 -y
+conda activate ssdbcodi
 ```
 
-You should see `(venv)` prepended to your shell prompt.
+You should see `(ssdbcodi)` prepended to your prompt.
 
 ## Step 3 — Install Python dependencies
 
@@ -38,27 +39,22 @@ Takes 1-3 minutes depending on your connection.
 
 ## Step 4 — Download the frontend JavaScript libraries
 
-The project ships with placeholder files for D3 and d3-lasso. Run the helper script:
+The project ships with placeholder files for D3 and d3-lasso. Anaconda Prompt has `curl` built in, so run:
 
-```bash
-bash scripts/download_libs.sh
+```
+curl -o static\lib\d3.v7.min.js https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
+curl -o static\lib\d3-lasso.min.js https://cdn.jsdelivr.net/npm/d3-lasso@0.0.5/build/d3-lasso.min.js
 ```
 
-This downloads `d3.v7.min.js` and `d3-lasso.min.js` into `static/lib/`.
+This downloads `d3.v7.min.js` and `d3-lasso.min.js` into `static\lib\`.
 
-If the script fails (e.g. behind a proxy), download the two files manually:
+Verify the files are real (not placeholders) by checking their sizes in Anaconda Prompt:
 
-```bash
-curl -o static/lib/d3.v7.min.js https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
-curl -o static/lib/d3-lasso.min.js https://cdn.jsdelivr.net/npm/d3-lasso@0.0.5/build/d3-lasso.min.js
+```
+dir static\lib\*.js
 ```
 
-Verify the files are real (not placeholders):
-
-```bash
-wc -l static/lib/*.js
-# Should show several thousand lines each, not ~5 lines
-```
+`d3.v7.min.js` should be ~300 KB or more; `d3-lasso.min.js` ~10 KB or more. If they are only a few KB, the download failed — re-run the curl commands above.
 
 ## Step 5 — Install and start Ollama
 
@@ -80,9 +76,9 @@ ollama serve
 
 You should see output like `Listening on 127.0.0.1:11434`.
 
-Verify it's working:
+Verify it's working in Anaconda Prompt:
 
-```bash
+```
 curl http://localhost:11434/api/tags
 ```
 
@@ -90,24 +86,15 @@ You should see a JSON list containing `mistral-small3.1:latest`.
 
 ## Step 6 — Configure environment variables
 
-```bash
-cp .env.example .env
+```
+copy .env.example .env
 ```
 
 The default values in `.env` already point to local Ollama on port 11434 with the
 `mistral-small3.1:latest` model, so you usually don't need to edit anything.
 
 If you want to use a different LLM (e.g. GPT-4o-mini), edit `.env`:
-def fit(self, X, constraints, prior_M=None):
-    # Use prior_M as initialization if provided
-    if prior_M is not None:
-        self.M = prior_M.copy()
-    
-    # Apply new constraints to refine M
-    for constraint in constraints:
-        # Update M using ITML algorithm with current constraints
-    
-    return self.M
+
 ```
 LLM_PROVIDER=openai
 LLM_MODEL=gpt-4o-mini
@@ -216,7 +203,7 @@ Constraints:
 
 **The page loads but the scatterplot stays empty**
 Check the browser console. The most common cause is the placeholder
-`d3.v7.min.js` or `d3-lasso.min.js`. Re-run `bash scripts/download_libs.sh`.
+`d3.v7.min.js` or `d3-lasso.min.js`. Re-run the curl commands from Step 4.
 
 **Chat returns "I had trouble understanding that"**
 The LLM is unreachable. Check:

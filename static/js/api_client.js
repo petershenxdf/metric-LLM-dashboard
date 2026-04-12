@@ -64,19 +64,33 @@ class APIClient {
     }
 
     // Chat
-    async sendChatMessage(sessionId, text, selectedIds) {
+    async sendChatMessage(sessionId, text, selectedIds, selectionGroups) {
         return this._request("POST", "/api/chat/message", {
             session_id: sessionId,
             text: text,
             selected_ids: selectedIds,
+            selection_groups: selectionGroups || [],
         });
     }
 
     // Feedback
-    async submitConstraint(sessionId, constraint) {
+    async queueConstraint(sessionId, constraint) {
+        // Formerly submitConstraint -- now this only stages a constraint for
+        // the next Run Clustering call. The backend no longer re-clusters
+        // on submit.
         return this._request("POST", "/api/feedback/submit", {
             session_id: sessionId,
             constraint: constraint,
+        });
+    }
+
+    async listPending(sessionId) {
+        return this._request("GET", `/api/feedback/pending/${sessionId}`);
+    }
+
+    async clearPending(sessionId) {
+        return this._request("POST", "/api/feedback/pending/clear", {
+            session_id: sessionId,
         });
     }
 

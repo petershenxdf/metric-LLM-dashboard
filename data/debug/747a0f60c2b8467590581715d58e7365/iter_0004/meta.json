@@ -1,0 +1,22 @@
+{
+  "iteration": 4,
+  "session_id": "747a0f60c2b8467590581715d58e7365",
+  "timestamp": 1775953395.8757267,
+  "duration_ms": 3233.52,
+  "triggering_constraint": {
+    "type": "triplet",
+    "confidence": "explicit",
+    "source": "rule",
+    "timestamp": 1775953390.5756276,
+    "anchor": 6,
+    "positive": 0,
+    "negative": 3
+  },
+  "n_points": 320,
+  "n_features": 2,
+  "n_clusters": 5,
+  "n_outliers": 11,
+  "n_labeled_normal": 171,
+  "n_labeled_outlier": 0,
+  "source_filename": "moons.csv"
+}

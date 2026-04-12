@@ -75,6 +75,19 @@ class Scatterplot {
             .domain([yExtent[0] - yPad, yExtent[1] + yPad])
             .range([this.height - padding, padding]);
 
+        // Make sure a background rect exists BEHIND the dots so drag starts
+        // on empty space are captured by the lasso handler.
+        if (this.bgRect === undefined || this.bgRect.empty()) {
+            this.bgRect = this.svg.insert("rect", ":first-child")
+                .attr("class", "lasso-bg")
+                .attr("fill", "transparent");
+        }
+        this.bgRect
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", this.width)
+            .attr("height", this.height);
+
         const selectedSet = new Set(this.state.selectedPointIds);
 
         const dots = this.pointsGroup.selectAll("circle.dot").data(points, (d) => d.id);
@@ -120,36 +133,89 @@ class Scatterplot {
                 event.stopPropagation();
             });
 
-        // Clicking empty space clears selection
-        this.svg.on("click", () => this.state.clearSelection());
-
-        this._attachLasso(merged);
+        this._attachLasso();
     }
 
-    _attachLasso(dotsSelection) {
-        if (typeof d3.lasso !== "function") {
-            // d3-lasso library not present -- fall back to no lasso
-            return;
+    // Custom D3 v7 compatible lasso. The old d3-lasso library uses d3.event /
+    // d3.mouse which were removed in D3 v6+, so we roll our own.
+    _attachLasso() {
+        // Ensure the lasso path overlay exists
+        if (!this.lassoPath) {
+            this.lassoPath = this.svg.append("path")
+                .attr("class", "lasso-path")
+                .attr("fill", "rgba(80, 140, 220, 0.15)")
+                .attr("stroke", "rgb(80, 140, 220)")
+                .attr("stroke-width", 1.5)
+                .attr("stroke-dasharray", "4 3")
+                .attr("pointer-events", "none")
+                .attr("d", null);
+        } else {
+            // Lift to the top so it draws above the dots
+            this.lassoPath.raise();
         }
-        if (this.lasso) {
-            this.svg.on(".dragstart", null);
-        }
-        this.lasso = d3.lasso()
-            .closePathDistance(75)
-            .closePathSelect(true)
-            .targetArea(this.svg)
-            .items(dotsSelection)
-            .on("start", () => {
-                dotsSelection.classed("selected", false);
+
+        const self = this;
+        let polygon = [];
+
+        const drag = d3.drag()
+            .container(function () { return this; })  // coordinates relative to <svg>
+            .filter((event) => {
+                // Only start lasso on the background rect or the svg itself,
+                // not on a dot (those have their own click handler).
+                const target = event.target;
+                return target.tagName !== "circle";
             })
-            .on("draw", () => {
-                // Optional: visual feedback during drag
+            .on("start", (event) => {
+                polygon = [[event.x, event.y]];
+                self.lassoPath.attr("d", `M${event.x},${event.y}`);
             })
-            .on("end", () => {
-                const selectedIds = this.lasso.selectedItems().data().map((d) => d.id);
-                this.state.setSelection(selectedIds);
+            .on("drag", (event) => {
+                polygon.push([event.x, event.y]);
+                self.lassoPath.attr("d", self._polygonPath(polygon));
+            })
+            .on("end", (event) => {
+                if (polygon.length < 3) {
+                    // Treated as a click on empty space -- clear selection
+                    self.lassoPath.attr("d", null);
+                    self.state.clearSelection();
+                    polygon = [];
+                    return;
+                }
+                const selectedIds = [];
+                self.pointsGroup.selectAll("circle.dot").each(function (d) {
+                    const cx = +this.getAttribute("cx");
+                    const cy = +this.getAttribute("cy");
+                    if (self._pointInPolygon([cx, cy], polygon)) {
+                        selectedIds.push(d.id);
+                    }
+                });
+                self.state.setSelection(selectedIds);
+                self.lassoPath.attr("d", null);
+                polygon = [];
             });
-        this.svg.call(this.lasso);
+
+        // Attach to the svg. Calling drag() again replaces the previous handlers.
+        this.svg.call(drag);
+    }
+
+    _polygonPath(points) {
+        if (!points.length) return null;
+        return "M" + points.map((p) => `${p[0]},${p[1]}`).join("L") + "Z";
+    }
+
+    // Ray-casting point-in-polygon test
+    _pointInPolygon(pt, polygon) {
+        const [x, y] = pt;
+        let inside = false;
+        for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+            const [xi, yi] = polygon[i];
+            const [xj, yj] = polygon[j];
+            const intersect =
+                yi > y !== yj > y &&
+                x < ((xj - xi) * (y - yi)) / (yj - yi + 1e-12) + xi;
+            if (intersect) inside = !inside;
+        }
+        return inside;
     }
 
     updateSelection(ids) {

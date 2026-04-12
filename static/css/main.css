@@ -118,6 +118,21 @@ html, body {
     background: #1d4ed8;
 }
 
+.control-bar button.primary.has-pending {
+    background: #f97316;
+    border-color: #f97316;
+    animation: pulse-pending 1.6s ease-in-out infinite;
+}
+
+.control-bar button.primary.has-pending:hover:not(:disabled) {
+    background: #ea580c;
+}
+
+@keyframes pulse-pending {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.5); }
+    50% { box-shadow: 0 0 0 6px rgba(249, 115, 22, 0); }
+}
+
 .control-bar .separator {
     width: 1px;
     height: 20px;

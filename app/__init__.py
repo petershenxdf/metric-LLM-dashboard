@@ -61,6 +61,9 @@ def create_app(config: Config) -> Flask:
     pipeline_service = PipelineService(session_service, config, debug_recorder=debug_recorder)
     chat_service = ChatService(session_service, llm_client, config)
     feedback_service = FeedbackService(session_service, pipeline_service, config)
+    # Break the circular dependency: pipeline needs feedback to flush pending
+    # constraints, feedback needs pipeline for the fallback apply path.
+    pipeline_service.feedback_service = feedback_service
 
     # Attach to app context for routes to access
     app.config["SESSION_SERVICE"] = session_service

@@ -13,6 +13,10 @@ def send_message():
     session_id = body.get("session_id")
     user_text = body.get("text", "").strip()
     selected_ids = body.get("selected_ids", [])
+    # selection_groups: list of lists of point ids. The chatbox lets the user
+    # stage multiple named groups (A, B, C, ...) so constraints that need
+    # more than one set of points (cannot-link, triplet, ...) can be built.
+    selection_groups = body.get("selection_groups", []) or []
 
     if not session_id:
         raise ValidationError("Missing session_id")
@@ -20,7 +24,9 @@ def send_message():
         raise ValidationError("Empty message")
 
     chat_service = current_app.config["CHAT_SERVICE"]
-    result = chat_service.process_message(session_id, user_text, selected_ids)
+    result = chat_service.process_message(
+        session_id, user_text, selected_ids, selection_groups
+    )
     return jsonify(result)
 
 

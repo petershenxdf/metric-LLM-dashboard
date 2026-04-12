@@ -53,30 +53,81 @@ class FeedbackService:
     # Public API
     # ------------------------------------------------------------------
 
-    def apply_constraint(self, session_id: str, constraint: Constraint) -> Dict[str, Any]:
+    def queue_constraint(self, session_id: str, constraint: Constraint) -> Dict[str, Any]:
+        """Stage a constraint without touching labels / metric / clusters.
+
+        The chatbox uses this so pressing "Send" does NOT trigger a pipeline
+        run. The constraint sits in state.pending_constraints until the user
+        presses "Run clustering", at which point flush_pending() applies every
+        staged constraint and re-runs the pipeline once.
+        """
         state = self.session_service.get(session_id)
         if state is None:
             return {"error": f"Session {session_id} not found"}
 
-        # Snapshot for undo BEFORE any mutation
-        state.snapshot()
-
-        channel = route_constraint(constraint)
-
-        # Apply to label channel if applicable
-        if channel in (ChannelType.LABEL, ChannelType.BOTH):
-            self._apply_to_label_channel(state, constraint)
-
-        # Apply to metric channel if applicable
-        updated_M = None
-        if channel in (ChannelType.METRIC, ChannelType.BOTH):
-            updated_M = self._apply_to_metric_channel(state, constraint)
-
+        state.pending_constraints.append(constraint)
         self.session_service.save(state)
 
-        # Re-run the pipeline with the updated labels and/or metric
-        return self.pipeline_service.apply_constraint_and_recluster(
-            session_id, constraint, updated_M=updated_M
+        return {
+            "queued": True,
+            "n_pending": len(state.pending_constraints),
+            "n_constraints": len(state.constraints_history),
+        }
+
+    def flush_pending(self, session_id: str) -> int:
+        """Apply every pending constraint to the label and metric channels.
+
+        Does NOT run the pipeline itself — the caller (pipeline_service) is
+        responsible for that, so we only run SSDBCODI + MDS once even when
+        several constraints were queued. Returns the number of constraints
+        that were flushed so the caller can decide whether to snapshot.
+        """
+        state = self.session_service.get(session_id)
+        if state is None or not state.pending_constraints:
+            return 0
+
+        # Snapshot once, BEFORE touching any state, so a single Undo rolls
+        # back the entire batch as a unit.
+        state.snapshot()
+
+        flushed = list(state.pending_constraints)
+        state.pending_constraints = []
+
+        for constraint in flushed:
+            channel = route_constraint(constraint)
+            if channel in (ChannelType.LABEL, ChannelType.BOTH):
+                self._apply_to_label_channel(state, constraint)
+            if channel in (ChannelType.METRIC, ChannelType.BOTH):
+                updated_M = self._apply_to_metric_channel(state, constraint)
+                if updated_M is not None:
+                    state.M = updated_M
+            state.constraints_history.append(constraint)
+
+        self.session_service.save(state)
+        return len(flushed)
+
+    def clear_pending(self, session_id: str) -> int:
+        """Drop any queued constraints without applying them."""
+        state = self.session_service.get(session_id)
+        if state is None:
+            return 0
+        n = len(state.pending_constraints)
+        state.pending_constraints = []
+        self.session_service.save(state)
+        return n
+
+    def apply_constraint(self, session_id: str, constraint: Constraint) -> Dict[str, Any]:
+        """Backwards-compatible path: stage + flush + cluster in one call.
+
+        Kept so older callers / tests keep working, but the dashboard's
+        chatbox now uses queue_constraint() and relies on the explicit
+        Run-Clustering button to flush.
+        """
+        queue_result = self.queue_constraint(session_id, constraint)
+        if "error" in queue_result:
+            return queue_result
+        return self.pipeline_service.run_full_pipeline(
+            session_id, triggering_constraint=constraint
         )
 
     def undo_last(self, session_id: str) -> Dict[str, Any]:

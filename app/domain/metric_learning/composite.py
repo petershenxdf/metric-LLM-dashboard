@@ -100,18 +100,66 @@ class CompositeMetricLearner(MetricLearner):
         self._sync_M()
 
     def _handle_must_link(self, X: np.ndarray, c: MustLink) -> None:
-        """Generate all-pairs from the point set and feed to ITML as similar pairs."""
+        """Apply a must-link constraint to the metric.
+
+        ITML needs BOTH similar and dissimilar pairs to fit — on the first
+        must-link (no cannot-links yet) it would silently skip the update and
+        M would stay at identity. That made metric learning invisible to the
+        user. To fix this we also do a direct whitening update: compute the
+        within-group covariance of the must-link set and blend its inverse
+        into M. Directions along which the must-link points vary become
+        *less* important, shrinking within-group distances — which is exactly
+        what "these are the same class" should mean geometrically.
+
+        We still feed the pairs to ITML so that once a dissimilar pair shows
+        up later, ITML can refine using the full accumulated history.
+        """
         ids = c.point_ids
         if len(ids) < 2:
             return
+
+        # 1) Direct whitening update on the shared M
+        group_X = X[ids]
+        center = group_X.mean(axis=0)
+        centered = group_X - center
+        within_cov = (centered.T @ centered) / max(len(ids) - 1, 1)
+
+        # Regularize with a fraction of the mean diagonal so the inverse is
+        # well-conditioned even if the group is collinear in some directions.
+        mean_diag = float(np.trace(within_cov) / self.n_features)
+        if mean_diag <= 0:
+            mean_diag = 1.0
+        reg = 1e-2 * mean_diag * np.eye(self.n_features)
+        try:
+            M_whiten = np.linalg.inv(within_cov + reg)
+        except np.linalg.LinAlgError:
+            M_whiten = np.linalg.pinv(within_cov + reg)
+
+        # Normalize M_whiten so its trace matches current M's trace — this
+        # keeps the scale of distances roughly comparable across updates.
+        cur_trace = float(np.trace(self.M))
+        whiten_trace = float(np.trace(M_whiten))
+        if whiten_trace > 0:
+            M_whiten = M_whiten * (cur_trace / whiten_trace)
+
+        # Blend: mostly the new whitening, a little of the existing metric
+        blend_alpha = 0.7
+        blended = blend_alpha * M_whiten + (1.0 - blend_alpha) * self.M
+        self.M = TripletLearner._project_to_psd(blended)
+
+        # 2) Also accumulate pairs into ITML for future joint refinement
         pairs = []
         labels = []
         for i in range(len(ids)):
             for j in range(i + 1, len(ids)):
                 pairs.append((ids[i], ids[j]))
                 labels.append(1)
+        # ITML's shared M prior should reflect what we just computed
+        self.itml.M = self.M.copy()
         self.itml.update(X, pairs=pairs, labels=labels)
-        self.M = self.itml.get_M()
+        # If ITML actually ran (both classes present), take its refined M
+        if len(set(self.itml.labels)) >= 2:
+            self.M = self.itml.get_M()
 
     def _handle_cannot_link(self, X: np.ndarray, c: CannotLink) -> None:
         """Cross product of group_a and group_b becomes dissimilar pairs."""

@@ -37,6 +37,10 @@ class PipelineService:
         self.config = config
         self.projector = MDSProjector(n_components=2)
         self.debug_recorder = debug_recorder
+        # Wired up after construction (to avoid a circular import with
+        # FeedbackService, which also depends on PipelineService). app.py
+        # sets this attribute once both services exist.
+        self.feedback_service = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -59,9 +63,22 @@ class PipelineService:
         """
         start = time.time()
 
+        # Flush any pending constraints BEFORE reading state, so the run sees
+        # an up-to-date DN / DO / M. This is what makes pressing "Run
+        # clustering" the only thing that actually mutates the world.
+        n_flushed = 0
+        if self.feedback_service is not None:
+            n_flushed = self.feedback_service.flush_pending(session_id)
+
         state = self.session_service.get(session_id)
         if state is None:
             return {"error": f"Session {session_id} not found"}
+
+        # If the caller didn't pass a triggering constraint explicitly but we
+        # just flushed some pending ones, attribute the run to the last
+        # flushed constraint so the debug recorder has context.
+        if triggering_constraint is None and n_flushed > 0 and state.constraints_history:
+            triggering_constraint = state.constraints_history[-1]
 
         X = state.get_X()
         n_features = X.shape[1]
@@ -138,33 +155,6 @@ class PipelineService:
 
         return self.run_full_pipeline(session_id)
 
-    def apply_constraint_and_recluster(
-        self,
-        session_id: str,
-        constraint: Constraint,
-        updated_M: Optional[np.ndarray] = None,
-    ) -> Dict[str, Any]:
-        """After a constraint has been applied (labels and/or M updated by
-        the feedback service), re-run the pipeline and return the result.
-
-        The feedback service is responsible for updating state.DN / state.DO
-        and passing in the updated_M if the metric channel was used.
-        """
-        state = self.session_service.get(session_id)
-        if state is None:
-            return {"error": f"Session {session_id} not found"}
-
-        if updated_M is not None:
-            state.M = updated_M
-
-        state.constraints_history.append(constraint)
-        self.session_service.save(state)
-
-        return self.run_full_pipeline(
-            session_id,
-            triggering_constraint=constraint,
-        )
-
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -196,6 +186,7 @@ class PipelineService:
             "n_clusters": n_clusters,
             "n_outliers": int(sum(state.current_outliers)),
             "n_constraints": len(state.constraints_history),
+            "n_pending": len(state.pending_constraints),
         }
 
     def build_cluster_summary(self, state: SessionState) -> Dict[str, Any]:
