@@ -4,8 +4,10 @@ __pycache__/
 .env
 data/uploads/*
 data/sessions/*
+data/debug/*
 !data/uploads/.gitkeep
 !data/sessions/.gitkeep
+!data/debug/.gitkeep
 .pytest_cache/
 .DS_Store
 *.egg-info/
